@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+	
+<project name="pmdsincedday" basedir="." default="pmd">
+
+    <property file="build.properties"/>
+
+    <path id="pmd.libs">
+         <fileset dir="${basedir}/${lib.pmd}">
+             <include name="*.jar"/>
+         </fileset>
+    </path>
+
+     <taskdef name="pmd" classname="net.sourceforge.pmd.ant.PMDTask">
+         <classpath refid="pmd.libs"/>
+     </taskdef>
+
+    <target name="init">
+        <delete includeemptydirs="yes" failonerror="false">
+            <fileset dir="${test.result.save}" includes="**/*"/>
+        </delete>
+        <mkdir dir="${test.result.save}"/>
+    </target>
+
+    <target name="get-changed-filelist-from-git" depends="init">
+        <exec executable="bash" outputproperty="git.changed.files">
+            <arg value="-c"/>
+            <arg value="${git.executable.location} log --since=&quot;${d.day}&quot; --name-only --pretty=format: --diff-filter=${git.diff.filter} --no-merges | grep \.java | sort | uniq"/>
+        </exec>
+    </target>
+
+    <target name="convert-to-ant-fileset" depends="get-changed-filelist-from-git">
+        <echo></echo>
+        <echo>---------------- Changed File List from ${d.day} ----------------</echo>
+        <echo>We will only choose *.java file to check and uniquely.</echo>
+        <echo></echo>
+        <!-- Just for debug
+        <echo>${pmd.source.changefiles}</echo>
+        -->
+    	
+    	<fileset dir="${basedir}/.." id="source.dir">
+        </fileset>
+    	
+    	<script language="javascript">
+		<![CDATA[
+    		importClass(java.io.File);
+
+    		arrayChangedFiles = project.getProperty("git.changed.files").split("\n");
+    		
+    		var fileList = "";
+    		
+    		for (idx = 0 ; idx < arrayChangedFiles.length ; idx++)
+    		{
+    		    file = arrayChangedFiles[idx];
+    		    fileList += file;
+
+                if ( idx < arrayChangedFiles.length - 1 )
+    		    {
+                    fileList += ",";
+                }
+    		}
+
+    		pmdSource = project.getReference("source.dir");
+    		pmdSource.setIncludes(fileList);
+    		pmdSource.getDirectoryScanner(pmdsincedday).scan();
+		]]>
+    	</script>
+    	
+    </target>
+
+    <target name="pmd" depends="convert-to-ant-fileset">
+
+        <pmd rulesetfiles="standard_ruleset.xml">
+            <formatter type="net.sourceforge.pmd.renderers.XMLRenderer" toFile="${basedir}/${test.result.save}/pmd.xml"/>
+            <fileset refid="source.dir" />
+        </pmd>
+    </target>
+
+</project>
